@@ -7,6 +7,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "helpers.h"
 #include "json.hpp"
+#include "spline.h"
 
 // for convenience
 using nlohmann::json;
@@ -50,7 +51,10 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
+  int lane = 1;
+  double ref_vel = 0.0;
+
+  h.onMessage([&lane,&ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
@@ -88,6 +92,8 @@ int main() {
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
 
+          int prev_size =  previous_path_x.size();
+
           json msgJson;
 
           vector<double> next_x_vals;
@@ -97,8 +103,49 @@ int main() {
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
            */
+          // Get Ego's current position for reference
+          double ref_x = car_x;
+          double ref_y = car_y;
+          double ref_yaw = deg2rad(car_yaw);
 
+          vector<double> pts_x;
+          vector<double> pts_y;
 
+          if (prev_size < 2) {
+          	pts_x.push_back(ref_x - cos(car_yaw));
+          	pts_y.push_back(ref_y - sin(car_yaw));
+
+          	pts_x.push_back(ref_x);
+          	pts_y.push_back(ref_y);
+          }
+          else {
+          	ref_x = previous_path_x[prev_size - 1];
+          	ref_y = previous_path_y[prev_size - 1];
+
+          	double prev_ref_x = previous_path_y[prev_size - 2];
+          	double prev_ref_y = previous_path_y[prev_size - 2];
+
+          	ref_yaw = atan2(ref_y - prev_ref_y, ref_x - prev_ref_x);
+
+          	pts_x.push_back(prev_ref_x);
+          	pts_y.push_back(prev_ref_y);
+
+          	pts_x.push_back(ref_x);
+          	pts_x.push_back(ref_y);
+          }
+
+          vector<vector<double>> next_wp;
+
+          for(int i = 0; i < 3; i ++) {
+          	double future_s = car_s + 30 * (i +1);
+          	next_wp[i] = getXY(future_s,(2+4*lane),map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+          	double shift_x = next_wp[i][0] - ref_x;
+          	double shift_y = next_wp[i][1] - ref_y;
+
+          	pts_x.push_back(shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw));
+          	pts_y.push_back(shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw));
+          }
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
