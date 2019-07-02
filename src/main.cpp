@@ -52,7 +52,7 @@ int main() {
   }
 
   int lane = 1;
-  double ref_vel = 45.0;
+  double ref_vel = 0.0;
 
   h.onMessage([&lane,&ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy]
@@ -94,11 +94,61 @@ int main() {
 
           int prev_size =  previous_path_x.size();
 
+          if (prev_size > 0) {
+            car_s = end_path_s;
+          }
+
           json msgJson;
 
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
+          const double MAX_VEL = 49.5;
+          const double MAX_ACC = 0.224;
 
+          bool car_ahead = false;
+          bool car_left = false;
+          bool car_right = false;
+          int car_lane;
+          double car_ahead_vel = MAX_VEL;
+          for (int i = 0; i < sensor_fusion.size(); i++) {
+            car_lane = -1;
+            float d = sensor_fusion[i][6];
+            if (d >= 0) {
+              car_lane = fabs(d/4.0);
+            }
+            else { continue;}
+            
+            double vx = sensor_fusion[i][3];
+            double vy = sensor_fusion[i][4];
+            double check_speed = sqrt(vx*vx+vy*vy);
+            double check_car_s = sensor_fusion[i][5];
+
+            check_car_s += ((double)prev_size*0.02*check_speed);
+
+            if (car_lane == lane && (check_car_s-car_s < 20) && check_car_s > car_s) {
+              car_ahead = true;
+              car_ahead_vel = check_speed;
+            }
+            else if (car_lane == (lane-1) && fabs(check_car_s-car_s) < 20) {
+              car_left = true;
+            }
+            else if ( car_lane == (lane+1) && fabs(check_car_s-car_s) < 20) {
+              car_right = true;
+            }
+
+          }
+
+          if(car_ahead) {
+            
+            if(lane > 0 && !car_left) { lane--; std::cout<< "LCL" << std::endl;}
+            else if (lane < 2 && !car_right) { lane++; std::cout<< "LCR" << std::endl;}
+            else {
+              if (ref_vel > car_ahead_vel){
+                ref_vel -= MAX_ACC;std::cout<< "Lower Vel" << std::endl;
+              }
+            }
+          }
+          else {
+            if (ref_vel < MAX_VEL) {ref_vel += 2. * MAX_ACC;} 
+          }
           /**
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
@@ -157,6 +207,9 @@ int main() {
           	pts_x[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
           	pts_y[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
           }
+                    vector<double> next_x_vals;
+          vector<double> next_y_vals;
+
 
           tk::spline s;
           s.set_points(pts_x,pts_y);
