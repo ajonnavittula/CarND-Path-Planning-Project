@@ -52,7 +52,7 @@ int main() {
   }
 
   int lane = 1;
-  double ref_vel = 0.0;
+  double ref_vel = 45.0;
 
   h.onMessage([&lane,&ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy]
@@ -110,42 +110,89 @@ int main() {
 
           vector<double> pts_x;
           vector<double> pts_y;
+        
+          if ( prev_size < 2 ) {
+               // There are not too many...
+            double prev_car_x = car_x - cos(car_yaw);
+            double prev_car_y = car_y - sin(car_yaw);
 
-          if (prev_size < 2) {
-          	pts_x.push_back(ref_x - cos(car_yaw));
-          	pts_y.push_back(ref_y - sin(car_yaw));
+            pts_x.push_back(prev_car_x);
+            pts_x.push_back(car_x);
 
-          	pts_x.push_back(ref_x);
-          	pts_y.push_back(ref_y);
-          }
+            pts_y.push_back(prev_car_y);
+            pts_y.push_back(car_y);
+          } 
           else {
-          	ref_x = previous_path_x[prev_size - 1];
-          	ref_y = previous_path_y[prev_size - 1];
+                // Use the last two points.
+            ref_x = previous_path_x[prev_size - 1];
+            ref_y = previous_path_y[prev_size - 1];
 
-          	double prev_ref_x = previous_path_y[prev_size - 2];
-          	double prev_ref_y = previous_path_y[prev_size - 2];
+            double ref_x_prev = previous_path_x[prev_size - 2];
+            double ref_y_prev = previous_path_y[prev_size - 2];
+            ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
 
-          	ref_yaw = atan2(ref_y - prev_ref_y, ref_x - prev_ref_x);
+            pts_x.push_back(ref_x_prev);
+            pts_x.push_back(ref_x);
 
-          	pts_x.push_back(prev_ref_x);
-          	pts_y.push_back(prev_ref_y);
+            pts_y.push_back(ref_y_prev);
+            pts_y.push_back(ref_y);
+          }
+          vector<double> next_wp0 = getXY(car_s + 30, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp1 = getXY(car_s + 60, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+          vector<double> next_wp2 = getXY(car_s + 90, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
-          	pts_x.push_back(ref_x);
-          	pts_x.push_back(ref_y);
+          pts_x.push_back(next_wp0[0]);
+          pts_x.push_back(next_wp1[0]);
+          pts_x.push_back(next_wp2[0]);
+
+          pts_y.push_back(next_wp0[1]);
+          pts_y.push_back(next_wp1[1]);
+          pts_y.push_back(next_wp2[1]);
+
+          for(int i = 0; i < pts_x.size(); i++) {
+
+          	double shift_x = pts_x[i] - ref_x;
+          	double shift_y = pts_y[i] - ref_y;
+
+          	pts_x[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
+          	pts_y[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
           }
 
-          vector<vector<double>> next_wp;
+          tk::spline s;
+          s.set_points(pts_x,pts_y);
 
-          for(int i = 0; i < 3; i ++) {
-          	double future_s = car_s + 30 * (i +1);
-          	next_wp[i] = getXY(future_s,(2+4*lane),map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            for ( int i = 0; i < prev_size; i++ ) {
+              next_x_vals.push_back(previous_path_x[i]);
+              next_y_vals.push_back(previous_path_y[i]);
+            }
 
-          	double shift_x = next_wp[i][0] - ref_x;
-          	double shift_y = next_wp[i][1] - ref_y;
+            // Calculate distance y position on 30 m ahead.
+            double target_x = 30.0;
+            double target_y = s(target_x);
+            double target_dist = sqrt(target_x*target_x + target_y*target_y);
 
-          	pts_x.push_back(shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw));
-          	pts_y.push_back(shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw));
-          }
+            double x_add_on = 0;
+
+            for( int i = 1; i < 50 - prev_size; i++ ) {
+              double N = target_dist/(0.02*ref_vel/2.24);
+              double x_point = x_add_on + target_x/N;
+              double y_point = s(x_point);
+
+              x_add_on = x_point;
+
+              double x_ref = x_point;
+              double y_ref = y_point;
+
+              x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
+              y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
+
+              x_point += ref_x;
+              y_point += ref_y;
+
+              next_x_vals.push_back(x_point);
+              next_y_vals.push_back(y_point);
+}
+
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
