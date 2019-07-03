@@ -92,6 +92,7 @@ int main() {
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
 
+          // Get #completed points by Ego
           int prev_size =  previous_path_x.size();
 
           if (prev_size > 0) {
@@ -100,21 +101,26 @@ int main() {
 
           json msgJson;
 
-          const double MAX_VEL = 49.5;
-          const double MAX_ACC = 0.224;
+          // Some constants for brevity 
+          const double MAX_VEL = 49.3;
+          const double MAX_ACC = 0.448;
 
+          // Variables for sensor fusion
           bool car_ahead = false;
           bool car_left = false;
           bool car_right = false;
           int car_lane;
           double car_ahead_vel = MAX_VEL;
+          float d;
+
+          // Check for location of cars around Ego
           for (int i = 0; i < sensor_fusion.size(); i++) {
             car_lane = -1;
-            float d = sensor_fusion[i][6];
-            if (d >= 0) {
-              car_lane = fabs(d/4.0);
-            }
-            else { continue;}
+            d = sensor_fusion[i][6];
+            
+            // Get location of car
+            if (d >= 0) { car_lane = fabs(d/4.0); }
+            else { continue; }
             
             double vx = sensor_fusion[i][3];
             double vy = sensor_fusion[i][4];
@@ -123,36 +129,32 @@ int main() {
 
             check_car_s += ((double)prev_size*0.02*check_speed);
 
-            if (car_lane == lane && (check_car_s-car_s < 20) && check_car_s > car_s) {
+            if (car_lane == lane && (check_car_s-car_s < 30) && check_car_s > car_s) {
               car_ahead = true;
               car_ahead_vel = check_speed;
             }
             else if (car_lane == (lane-1) && fabs(check_car_s-car_s) < 20) {
               car_left = true;
             }
-            else if ( car_lane == (lane+1) && fabs(check_car_s-car_s) < 20) {
+            else if (car_lane == (lane+1) && fabs(check_car_s-car_s) < 20) {
               car_right = true;
             }
 
           }
 
-          if(car_ahead) {
-            
-            if(lane > 0 && !car_left) { lane--; std::cout<< "LCL" << std::endl;}
-            else if (lane < 2 && !car_right) { lane++; std::cout<< "LCR" << std::endl;}
-            else {
-              if (ref_vel > car_ahead_vel){
-                ref_vel -= MAX_ACC;std::cout<< "Lower Vel" << std::endl;
-              }
+          // Car spotted in front, check for options
+          if(car_ahead) {  
+            if(lane > 0 && !car_left) { lane--; }
+            else if (lane < 2 && !car_right) { lane++; }
+            else if (ref_vel > car_ahead_vel) {
+              if(fabs(ref_vel - car_ahead_vel) < 1.5 * MAX_ACC) { ref_vel = car_ahead_vel; }
+              else { ref_vel -= 0.5 * MAX_ACC; }
             }
           }
           else {
-            if (ref_vel < MAX_VEL) {ref_vel += 2. * MAX_ACC;} 
+            if (ref_vel < MAX_VEL) {ref_vel += MAX_ACC;} 
           }
-          /**
-           * TODO: define a path made up of (x,y) points that the car will visit
-           *   sequentially every .02 seconds
-           */
+
           // Get Ego's current position for reference
           double ref_x = car_x;
           double ref_y = car_y;
@@ -160,20 +162,20 @@ int main() {
 
           vector<double> pts_x;
           vector<double> pts_y;
-        
+          
+          // Not enough previous points, estimate position and angle
           if ( prev_size < 2 ) {
-               // There are not too many...
-            double prev_car_x = car_x - cos(car_yaw);
-            double prev_car_y = car_y - sin(car_yaw);
+            double car_x_prev = car_x - cos(car_yaw);
+            double car_y_prev = car_y - sin(car_yaw);
 
-            pts_x.push_back(prev_car_x);
+            pts_x.push_back(car_x_prev);
             pts_x.push_back(car_x);
 
-            pts_y.push_back(prev_car_y);
+            pts_y.push_back(car_y_prev);
             pts_y.push_back(car_y);
           } 
           else {
-                // Use the last two points.
+
             ref_x = previous_path_x[prev_size - 1];
             ref_y = previous_path_y[prev_size - 1];
 
@@ -187,6 +189,8 @@ int main() {
             pts_y.push_back(ref_y_prev);
             pts_y.push_back(ref_y);
           }
+
+          // Calculate anchor points
           vector<double> next_wp0 = getXY(car_s + 30, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp1 = getXY(car_s + 60, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp2 = getXY(car_s + 90, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
@@ -207,44 +211,45 @@ int main() {
           	pts_x[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
           	pts_y[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
           }
-                    vector<double> next_x_vals;
+          
+          // Calculate final waypoints
+          vector<double> next_x_vals;
           vector<double> next_y_vals;
 
 
           tk::spline s;
           s.set_points(pts_x,pts_y);
 
-            for ( int i = 0; i < prev_size; i++ ) {
-              next_x_vals.push_back(previous_path_x[i]);
-              next_y_vals.push_back(previous_path_y[i]);
-            }
+          for ( int i = 0; i < prev_size; i++ ) {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
+          }
 
-            // Calculate distance y position on 30 m ahead.
-            double target_x = 30.0;
-            double target_y = s(target_x);
-            double target_dist = sqrt(target_x*target_x + target_y*target_y);
+          double target_x = 30.0;
+          double target_y = s(target_x);
+          double target_dist = sqrt(target_x*target_x + target_y*target_y);
 
-            double x_add_on = 0;
+          double x_add_on = 0;
 
-            for( int i = 1; i < 50 - prev_size; i++ ) {
-              double N = target_dist/(0.02*ref_vel/2.24);
-              double x_point = x_add_on + target_x/N;
-              double y_point = s(x_point);
+          for( int i = 1; i < 50 - prev_size; i++ ) {
+            double N = target_dist/(0.02*ref_vel/2.24);
+            double x_point = x_add_on + target_x/N;
+            double y_point = s(x_point);
 
-              x_add_on = x_point;
+            x_add_on = x_point;
 
-              double x_ref = x_point;
-              double y_ref = y_point;
+            double x_ref = x_point;
+            double y_ref = y_point;
 
-              x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
-              y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
+            x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
+            y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
 
-              x_point += ref_x;
-              y_point += ref_y;
+            x_point += ref_x;
+            y_point += ref_y;
 
-              next_x_vals.push_back(x_point);
-              next_y_vals.push_back(y_point);
-}
+            next_x_vals.push_back(x_point);
+            next_y_vals.push_back(y_point);
+          }
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
