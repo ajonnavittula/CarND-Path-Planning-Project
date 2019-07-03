@@ -22,36 +22,35 @@ The method chosen to achieve these goals is the utilization of the spline librar
 
 ```C++
 // Not enough previous points, estimate position and angle
-    if ( prev_size < 2 ) {
-        double car_x_prev = car_x - cos(car_yaw);
-        double car_y_prev = car_y - sin(car_yaw);
+if ( prev_size < 2 ) {
+    double car_x_prev = car_x - cos(car_yaw);
+    double car_y_prev = car_y - sin(car_yaw);
 
-        pts_x.push_back(car_x_prev);
-        pts_x.push_back(car_x);
+    pts_x.push_back(car_x_prev);
+    pts_x.push_back(car_x);
 
-        pts_y.push_back(car_y_prev);
-        pts_y.push_back(car_y);
-    } 
-    else {
+    pts_y.push_back(car_y_prev);
+    pts_y.push_back(car_y);
+} 
+else {
+    ref_x = previous_path_x[prev_size - 1];
+    ref_y = previous_path_y[prev_size - 1];
 
-        ref_x = previous_path_x[prev_size - 1];
-        ref_y = previous_path_y[prev_size - 1];
+    double ref_x_prev = previous_path_x[prev_size - 2];
+    double ref_y_prev = previous_path_y[prev_size - 2];
+    ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
 
-        double ref_x_prev = previous_path_x[prev_size - 2];
-        double ref_y_prev = previous_path_y[prev_size - 2];
-        ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
+    pts_x.push_back(ref_x_prev);
+    pts_x.push_back(ref_x);
 
-        pts_x.push_back(ref_x_prev);
-        pts_x.push_back(ref_x);
+    pts_y.push_back(ref_y_prev);
+    pts_y.push_back(ref_y);
+}
 
-        pts_y.push_back(ref_y_prev);
-        pts_y.push_back(ref_y);
-    }
-
-    // Calculate future anchor points
-    vector<double> next_wp0 = getXY(car_s + 30, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp1 = getXY(car_s + 60, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp2 = getXY(car_s + 90, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+// Calculate future anchor points
+vector<double> next_wp0 = getXY(car_s + 30, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+vector<double> next_wp1 = getXY(car_s + 60, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+vector<double> next_wp2 = getXY(car_s + 90, 2 + 4*lane, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 ```
 Once the waypoints have been calculated, they are transformed into Ego's local co-ordinate frame to simplify calculations. The transformed co-ordinates are fed to the spline function and the required number of waypoints are extracted from the spline. To follow the acceleration/speed/jerk constraints, the spacing between the extracted points is varied based on required velocity as shown below.
 
