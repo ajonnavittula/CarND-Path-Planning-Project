@@ -12,7 +12,7 @@ As shown below the car is able to travel over 4.32 miles following all the const
 
 ## Reflection
 
-This implementation of the path planning project is influenced heavily by the Q&A session held by Aaron and David. The three major components of the path planner are trajectory generation, behavior planning and sensor fusion. Each one of them is discussed in detail below.
+This implementation of the path planning project is influenced heavily by the Q&A session held by Aaron and David. The three major components of the path planner are trajectory generation, behavior planning and sensor fusion. They are discussed in detail below.
 
 ### Trajectory Generation
 
@@ -78,7 +78,7 @@ else {
 ```
 ### Sensor Fusion
 
-Sensor fusion involves understanding the location of cars relative to Ego's position. The simulated outputs the lane location, velocity and distance of every car in Ego's vicinity. Based on these values the positions of each of the cars is estimated at a future state and based on where they located respective to Ego flags are set. If a car is ahead of Ego and within 30 meters, the `car_ahead` flag is set. If a car is either to the left or right of Ego and within 20 meters, the `car_left` or `car_right` flags are set. These flags are then used by the behavior planner to plan for lane changes or acceleration/braking. The code snippet below shows the calculations for flags.
+Sensor fusion involves understanding the location of cars relative to Ego's position. The simulater outputs the lane location, velocity and distance of every car in Ego's vicinity. Based on these values the positions of each of the cars is estimated at a future state and flags are set if they are close to Ego. If a car is ahead of Ego and within 30 meters, the `car_ahead` flag is set. If a car is either to the left or right of Ego and within 20 meters (ahead or behind), the `car_left` or `car_right` flags are set. These flags are then used by the behavior planner to plan for lane changes or acceleration/braking. The code snippet below shows the calculations for flags.
 
 ```C++
 check_car_s += ((double)prev_size*0.02*check_speed);
