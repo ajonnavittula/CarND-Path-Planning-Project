@@ -6,7 +6,7 @@ The code compiles with cmake and make. There were no modifications to the CMakeL
 
 ## Valid Trajectories
 
-As shown below the car is able to travel over 4.32 miles following all the constraints ( acceleration/jerk/speed limits, collision avoidance, and driving inside the lanes).
+As shown in the thumbnail below the car is able to travel over 4.32 miles following all the constraints ( acceleration/jerk/speed limits, collision avoidance, and driving inside the lanes). The thumbnail can be clicked to view a video of the car in motion.
 
 [![Path Planner](http://img.youtube.com/vi/JzS-r17KnnQ/0.jpg)](https://youtu.be/JzS-r17KnnQ)
 
